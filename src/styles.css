@@ -1,0 +1,347 @@
+/* react-finance-grid — default theme.
+   Override the CSS custom properties on .rfg-root to re-skin. */
+.rfg-root {
+  --rfg-border: #e2e8f0;
+  --rfg-bg: #ffffff;
+  --rfg-header-bg: #f8fafc;
+  --rfg-row-hover: #f1f5f9;
+  --rfg-pinned-shadow: rgba(15, 23, 42, 0.12);
+  --rfg-accent: #2563eb;
+  --rfg-accent-soft: rgba(37, 99, 235, 0.15);
+  --rfg-text: #0f172a;
+  --rfg-muted: #64748b;
+  --rfg-total-bg: #eef2ff;
+  --rfg-skeleton-a: #e2e8f0;
+  --rfg-skeleton-b: #f1f5f9;
+  --rfg-radius: 10px;
+  --rfg-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --rfg-font-size: 13.5px;
+
+  font-family: var(--rfg-font);
+  font-size: var(--rfg-font-size);
+  color: var(--rfg-text);
+}
+
+/* ---------------- toolbar / search ---------------- */
+.rfg-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 2px;
+}
+
+.rfg-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--rfg-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: var(--rfg-bg);
+  color: var(--rfg-muted);
+  min-width: 240px;
+}
+
+.rfg-search input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  color: var(--rfg-text);
+  width: 100%;
+}
+
+.rfg-search:focus-within {
+  border-color: var(--rfg-accent);
+  box-shadow: 0 0 0 3px var(--rfg-accent-soft);
+}
+
+/* ---------------- scroll container ---------------- */
+.rfg-scroll {
+  position: relative;
+  overflow: auto;
+  border: 1px solid var(--rfg-border);
+  border-radius: var(--rfg-radius);
+  background: var(--rfg-bg);
+  overscroll-behavior: contain;
+}
+
+/* ---------------- header ---------------- */
+.rfg-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  background: var(--rfg-header-bg);
+  border-bottom: 1px solid var(--rfg-border);
+  box-sizing: border-box;
+}
+
+.rfg-header-cell {
+  font-weight: 600;
+  user-select: none;
+  background: var(--rfg-header-bg);
+}
+
+.rfg-header-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rfg-header-actions {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+  padding-left: 6px;
+  flex-shrink: 0;
+}
+
+/* ---------------- cells ---------------- */
+.rfg-cell {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border-right: 1px solid var(--rfg-border);
+  background: inherit;
+  position: relative;
+  overflow: hidden;
+}
+
+.rfg-cell--right {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.rfg-cell--center {
+  justify-content: center;
+  text-align: center;
+}
+
+.rfg-cell-content {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* pinned (sticky) cells */
+.rfg-cell--pin-left,
+.rfg-cell--pin-right {
+  position: sticky;
+  z-index: 10;
+  background: var(--rfg-bg);
+}
+
+.rfg-header .rfg-cell--pin-left,
+.rfg-header .rfg-cell--pin-right,
+.rfg-total-row .rfg-cell--pin-left,
+.rfg-total-row .rfg-cell--pin-right {
+  z-index: 20;
+}
+
+.rfg-header .rfg-cell--pin-left,
+.rfg-header .rfg-cell--pin-right {
+  background: var(--rfg-header-bg);
+}
+
+.rfg-total-row .rfg-cell--pin-left,
+.rfg-total-row .rfg-cell--pin-right {
+  background: var(--rfg-total-bg);
+}
+
+.rfg-cell--pin-left-last {
+  box-shadow: 2px 0 4px -1px var(--rfg-pinned-shadow);
+}
+
+.rfg-cell--pin-right-first {
+  box-shadow: -2px 0 4px -1px var(--rfg-pinned-shadow);
+  border-left: 1px solid var(--rfg-border);
+}
+
+/* ---------------- body & rows ---------------- */
+.rfg-body {
+  position: relative;
+}
+
+.rfg-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  background: var(--rfg-bg);
+  border-bottom: 1px solid var(--rfg-border);
+  box-sizing: border-box;
+  will-change: transform;
+}
+
+.rfg-row--static {
+  position: relative;
+  will-change: auto;
+}
+
+.rfg-row:hover,
+.rfg-row:hover .rfg-cell--pin-left,
+.rfg-row:hover .rfg-cell--pin-right {
+  background: var(--rfg-row-hover);
+}
+
+.rfg-row--clickable {
+  cursor: pointer;
+}
+
+/* ---------------- expanded detail ---------------- */
+.rfg-detail-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: var(--rfg-bg);
+  border-bottom: 1px solid var(--rfg-border);
+  box-sizing: border-box;
+  will-change: transform;
+}
+
+.rfg-detail-content {
+  position: sticky;
+  left: 0;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 12px 16px 12px 40px;
+  overflow: auto;
+  background:
+    linear-gradient(0deg, rgba(37, 99, 235, 0.04), rgba(37, 99, 235, 0.04)),
+    var(--rfg-bg);
+}
+
+.rfg-expander-cell {
+  padding: 0;
+  justify-content: center;
+}
+
+.rfg-expander svg {
+  transition: transform 0.15s ease;
+}
+
+.rfg-expander--open svg {
+  transform: rotate(90deg);
+}
+
+/* ---------------- buttons & focus ---------------- */
+.rfg-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--rfg-muted);
+  cursor: pointer;
+}
+
+.rfg-icon-btn:hover {
+  background: rgba(100, 116, 139, 0.15);
+  color: var(--rfg-text);
+}
+
+.rfg-icon-btn--active {
+  color: var(--rfg-accent);
+}
+
+.rfg-icon-btn:focus-visible,
+.rfg-resize-handle:focus-visible,
+.rfg-search input:focus-visible {
+  outline: 2px solid var(--rfg-accent);
+  outline-offset: 1px;
+}
+
+/* ---------------- resize handle ---------------- */
+.rfg-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: col-resize;
+  z-index: 5;
+  touch-action: none;
+}
+
+.rfg-resize-handle:hover::after,
+.rfg-resize-handle:active::after,
+.rfg-resize-handle:focus-visible::after {
+  content: "";
+  position: absolute;
+  top: 15%;
+  bottom: 15%;
+  left: 2px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--rfg-accent);
+}
+
+/* ---------------- grand total ---------------- */
+.rfg-total-row {
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  background: var(--rfg-total-bg);
+  border-top: 2px solid var(--rfg-accent);
+  box-sizing: border-box;
+}
+
+.rfg-total-row .rfg-cell {
+  background: var(--rfg-total-bg);
+}
+
+.rfg-total-content {
+  font-weight: 700;
+}
+
+/* ---------------- empty / skeleton ---------------- */
+.rfg-empty {
+  position: sticky;
+  left: 0;
+  padding: 32px;
+  text-align: center;
+  color: var(--rfg-muted);
+}
+
+.rfg-skeleton-bar {
+  display: inline-block;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg,
+      var(--rfg-skeleton-a) 25%,
+      var(--rfg-skeleton-b) 50%,
+      var(--rfg-skeleton-a) 75%);
+  background-size: 200% 100%;
+  animation: rfg-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes rfg-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rfg-skeleton-bar {
+    animation: none;
+  }
+
+  .rfg-expander svg {
+    transition: none;
+  }
+}

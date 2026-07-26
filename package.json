@@ -1,0 +1,92 @@
+{
+  "name": "react-finance-grid",
+  "version": "0.1.0",
+  "description": "High-performance, financial-grade React data table: virtualized rows, left/right pinned columns with header pin controls, skeleton loading for Suspense, expandable rows, sticky grand-total aggregations, sorting, column search, and resizable/stretch columns. TypeScript-first, zero runtime dependencies, SSR-safe.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./styles.css": "./dist/styles.css",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "lint": "eslint src tests demo",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsup && cp src/styles.css dist/styles.css",
+    "validate:exports": "node scripts/validate-exports.mjs",
+    "demo:build": "esbuild demo/main.tsx --bundle --outdir=demo/dist --jsx=automatic --loader:.css=css --define:process.env.NODE_ENV='\"production\"'",
+    "prepublishOnly": "npm run lint && npm run typecheck && npm run test && npm run build && npm run validate:exports"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.4.6",
+    "@testing-library/react": "^16.0.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "esbuild": "^0.23.0",
+    "eslint": "^9.9.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "jsdom": "^25.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsup": "^8.2.4",
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.2.0",
+    "vitest": "^2.0.5"
+  },
+  "keywords": [
+    "react",
+    "table",
+    "datagrid",
+    "data-table",
+    "virtualized",
+    "windowing",
+    "pinned-columns",
+    "sticky-columns",
+    "skeleton",
+    "suspense",
+    "expandable-rows",
+    "grand-total",
+    "aggregation",
+    "finance",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/react-finance-grid.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/react-finance-grid/issues"
+  },
+  "homepage": "https://github.com/your-org/react-finance-grid#readme",
+  "engines": {
+    "node": ">=18"
+  }
+}
