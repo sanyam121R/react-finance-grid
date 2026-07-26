@@ -1,7 +1,7 @@
 {
   "name": "react-finance-grid",
-  "version": "0.1.0",
-  "description": "High-performance, financial-grade React data table: virtualized rows, left/right pinned columns with header pin controls, skeleton loading for Suspense, expandable rows, sticky grand-total aggregations, sorting, column search, and resizable/stretch columns. TypeScript-first, zero runtime dependencies, SSR-safe.",
+  "version": "0.2.0",
+  "description": "High-performance, financial-grade React data table: virtualized rows, pin-in-place sticky columns, drag reorder, per-column menu, column highlighting, async expandable rows, sticky grand totals, multi-sort, search, visibility management and layout persistence. TypeScript-first, zero runtime dependencies, SSR-safe.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -76,7 +76,13 @@
     "grand-total",
     "aggregation",
     "finance",
-    "typescript"
+    "typescript",
+    "column-reorder",
+    "column-menu",
+    "async-expansion",
+    "layout-persistence",
+    "multi-sort",
+    "column-visibility"
   ],
   "repository": {
     "type": "git",

@@ -1,12 +1,35 @@
 import { renderToString } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DataTable, TableSkeleton } from "../src";
 import { getRowId, makeColumns, makeData } from "./helpers";
 
+describe("SSR warnings", () => {
+  it("renders menus/panels without useLayoutEffect warnings", () => {
+    const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+    renderToString(
+      <DataTable
+        data={makeData(3)}
+        columns={makeColumns()}
+        getRowId={getRowId}
+        showSearch
+        showColumnsPanel
+        showGrandTotal
+        multiSort
+        density="compact"
+        loadRowDetails={async () => ({})}
+        renderExpandedRow={() => <div>panel</div>}
+      />
+    );
+    const messages = warn.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(messages).not.toContain("useLayoutEffect");
+    warn.mockRestore();
+  });
+});
+
 describe("SSR safety", () => {
   it("imports without touching browser globals", () => {
-    // expect(typeof window).toBe("undefined");
-    expect(typeof DataTable).toBe("function");
+    // forwardRef components are objects; both must be renderable
+    expect(["function", "object"]).toContain(typeof DataTable);
     expect(typeof TableSkeleton).toBe("function");
   });
 

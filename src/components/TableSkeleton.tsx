@@ -1,8 +1,9 @@
 import type { TableSkeletonProps } from "../types";
+import { DENSITY_ROW_HEIGHT } from "../utils/layout";
 import type { ResolvedColumn } from "../hooks/useColumnLayout";
 import { EXPANDER_WIDTH } from "../utils/layout";
 import { clsx } from "../utils/clsx";
-import { pinnedCellClass, pinnedCellStyle } from "./HeaderCell";
+import { cellLayoutClass, cellLayoutStyle } from "./HeaderCell";
 
 /** Internal: skeleton body rows matching the real column structure. */
 export function SkeletonRows<T>({
@@ -35,8 +36,8 @@ export function SkeletonRows<T>({
           {columns.map((col) => (
             <div
               key={col.id}
-              className={clsx("rfg-cell", pinnedCellClass(col))}
-              style={pinnedCellStyle(col)}
+              className={clsx("rfg-cell", cellLayoutClass(col))}
+              style={cellLayoutStyle(col)}
             >
               <span
                 className="rfg-skeleton-bar"
@@ -63,18 +64,20 @@ export function SkeletonRows<T>({
 export function TableSkeleton({
   rows = 8,
   columns = 5,
-  rowHeight = 44,
+  rowHeight,
   height,
   className,
+  density = "comfortable",
 }: TableSkeletonProps) {
+  const effectiveRowHeight = rowHeight ?? DENSITY_ROW_HEIGHT[density];
   return (
     <div
-      className={clsx("rfg-root", className)}
+      className={clsx("rfg-root", `rfg-root--${density}`, className)}
       style={{ height }}
       data-testid="rfg-table-skeleton"
     >
       <div className="rfg-scroll" aria-busy="true" aria-label="Loading table">
-        <div className="rfg-header" style={{ height: rowHeight }}>
+        <div className="rfg-header" style={{ height: effectiveRowHeight }}>
           {Array.from({ length: columns }, (_, c) => (
             <div key={c} className="rfg-cell rfg-header-cell" style={{ flex: 1 }}>
               <span className="rfg-skeleton-bar" style={{ width: "60%" }} />
@@ -82,7 +85,7 @@ export function TableSkeleton({
           ))}
         </div>
         {Array.from({ length: rows }, (_, r) => (
-          <div key={r} className="rfg-row rfg-row--static" style={{ height: rowHeight }}>
+          <div key={r} className="rfg-row rfg-row--static" style={{ height: effectiveRowHeight }}>
             {Array.from({ length: columns }, (_, c) => (
               <div key={c} className="rfg-cell" style={{ flex: 1 }}>
                 <span
