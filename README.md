@@ -6,6 +6,10 @@ High-performance, financial-grade data table for React 18+. TypeScript-first,
 > Working package name: `react-finance-grid`. The final npm scope/name can be
 > changed in `package.json` before publish without any code changes.
 
+### Demo
+
+![Demo](demo/images/Demo.png)
+
 ## Features
 
 - 🦴 **Skeleton loading** — `isLoading` renders shimmer rows matching your real
