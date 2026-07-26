@@ -98,6 +98,7 @@ function DataTableInner<T, D>(
     multiSort = false,
     highlightTotals = true,
     onLayoutChange,
+    menuPortalContainer,
   } = props;
 
   const rowHeight = props.rowHeight ?? DENSITY_ROW_HEIGHT[density];
@@ -125,10 +126,39 @@ function DataTableInner<T, D>(
     return () => ro.disconnect();
   }, []);
 
-  const onScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
-    setScrollTop(e.currentTarget.scrollTop);
-  }, []);
-
+   /**
+   * Scroll updates are coalesced to one state update per animation frame:
+   * the first event of a burst applies immediately (so programmatic scrolling
+   * is observable synchronously), later events in the same frame are merged.
+   */
+   const scrollRafRef = useRef<number | null>(null);
+   const pendingScrollRef = useRef(0);
+   const onScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
+     const top = e.currentTarget.scrollTop;
+     pendingScrollRef.current = top;
+     if (
+       typeof window === "undefined" ||
+       typeof window.requestAnimationFrame !== "function"
+     ) {
+       setScrollTop(top);
+       return;
+     }
+     if (scrollRafRef.current !== null) return;
+     setScrollTop(top);
+     scrollRafRef.current = window.requestAnimationFrame(() => {
+       scrollRafRef.current = null;
+       setScrollTop(pendingScrollRef.current);
+     });
+   }, []);
+ 
+   useEffect(
+     () => () => {
+       if (scrollRafRef.current !== null && typeof window !== "undefined") {
+         window.cancelAnimationFrame(scrollRafRef.current);
+       }
+     },
+     []
+   );
   /* ---------------- layout state: order/pin/width/visibility/highlight ---- */
   const layoutState = useGridLayoutState<T>({
     columns,
@@ -318,8 +348,12 @@ function DataTableInner<T, D>(
     [cols]
   );
 
-  /* ---------------- drag reorder ---------------- */
-  const [draggingId, setDraggingId] = useState<string | null>(null);
+ /* ---------------- drag reorder ---------------- */
+ const columnsById = useMemo(
+  () => new Map(columns.map((c) => [c.id, c])),
+  [columns]
+);
+const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const draggingRef = useRef<string | null>(null);
 
@@ -343,7 +377,11 @@ function DataTableInner<T, D>(
       togglePin: (columnId) => layoutState.togglePin(columnId),
       moveColumn: (columnId, direction) =>
         layoutState.moveColumn(columnId, direction),
-      hideColumn: (columnId) => layoutState.setVisibility(columnId, false),
+      hideColumn: (columnId) => {
+        layoutState.setVisibility(columnId, false);
+        // the menu trigger disappears with the column — keep focus in the grid
+        scrollRef.current?.focus?.();
+      },
       resetWidth: (columnId) => layoutState.resetColumnWidth(columnId),
       setHighlight: (columnId, color: HighlightColor) =>
         layoutState.setHighlight(columnId, color),
@@ -355,10 +393,12 @@ function DataTableInner<T, D>(
       },
       dragOver: (columnId) => {
         if (!draggingRef.current || draggingRef.current === columnId) return;
+        // never advertise a drop the reorder will refuse
+        if (columnsById.get(columnId)?.movable === false) return;
         setDropTargetId(columnId);
       },
-      drop: (columnId) => {
-        const dragId = draggingRef.current;
+      drop: (columnId, fallbackDragId) => {
+        const dragId = draggingRef.current ?? fallbackDragId ?? null;
         draggingRef.current = null;
         setDraggingId(null);
         setDropTargetId(null);
@@ -372,7 +412,7 @@ function DataTableInner<T, D>(
         setDropTargetId(null);
       },
     }),
-    [sorting, setSorting, layoutState, startResizeDrag, nudgeColumnWidth]
+    [sorting, setSorting, layoutState, startResizeDrag, nudgeColumnWidth, columnsById]
   );
 
   /* ---------------- layout snapshot / restore / reset ---------------- */
@@ -470,6 +510,7 @@ function DataTableInner<T, D>(
     return (
       <div
         role={row ? "cell" : "columnheader"}
+        aria-label={row ? undefined : "Row details"}
         className="rfg-cell rfg-cell--pin-left rfg-expander-cell"
         style={{ width: EXPANDER_WIDTH, minWidth: EXPANDER_WIDTH, left: 0 }}
       >
@@ -495,18 +536,25 @@ function DataTableInner<T, D>(
   const renderDetailBody = (row: T, rowId: string): ReactNode => {
     const state = details.getState(rowId);
     const reload = () => details.reload(row, rowId);
+    const collapse = () => collapseRow(rowId);
 
     if (details.isAsync) {
       if (state.status === "idle" || state.status === "loading") {
         return (
-          renderDetailLoading?.({ row, rowId }) ?? <DetailLoading rowId={rowId} />
+          renderDetailLoading?.({ row, rowId, reload, collapse }) ?? (
+            <DetailLoading rowId={rowId} />
+          )
         );
       }
       if (state.status === "error") {
         return (
-          renderDetailError?.({ row, rowId, error: state.error, reload }) ?? (
-            <DetailError rowId={rowId} error={state.error} onRetry={reload} />
-          )
+          renderDetailError?.({
+            row,
+            rowId,
+            error: state.error,
+            reload,
+            collapse,
+          }) ?? <DetailError rowId={rowId} error={state.error} onRetry={reload} />
         );
       }
     }
@@ -551,6 +599,8 @@ function DataTableInner<T, D>(
               onToggle={layoutState.toggleVisibility}
               onShowAll={layoutState.showAllColumns}
               onResetLayout={resetLayout}
+              menuPortalContainer={menuPortalContainer}
+              portalClassName={className}
             />
           )}
           <span className="rfg-toolbar-spacer" />
@@ -565,6 +615,7 @@ function DataTableInner<T, D>(
         style={{ height }}
         onScroll={onScroll}
         role="table"
+        tabIndex={0}
         aria-label={ariaLabel}
         aria-rowcount={sorted.length + 1 + (showGrandTotal ? 1 : 0)}
         aria-colcount={cols.length + (hasExpander ? 1 : 0)}
@@ -599,6 +650,8 @@ function DataTableInner<T, D>(
                 isDragging={draggingId === col.id}
                 isDropTarget={dropTargetId === col.id}
                 actions={headerActions}
+                menuPortalContainer={menuPortalContainer}
+                portalClassName={className}
               />
             );
           })}
@@ -634,19 +687,23 @@ function DataTableInner<T, D>(
               if (item.kind === "detail") {
                 return (
                   <div
-                    key={`${item.id}::detail`}
-                    className="rfg-detail-row"
-                    data-testid={`detail-${item.id}`}
-                    style={{
-                      transform: `translateY(${vi.start}px)`,
-                      height: vi.height,
-                      width: rowWidth,
-                    }}
+                  key={`${item.id}::detail`}
+                  className="rfg-detail-row"
+                  role="row"
+                  data-testid={`detail-${item.id}`}
+                  style={{
+                    transform: `translateY(${vi.start}px)`,
+                    height: vi.height,
+                    width: rowWidth,
+                  }}
+                >
+                  <div
+                    className="rfg-detail-content"
+                    role="cell"
+                    aria-colindex={1}
+                    aria-colspan={cols.length + (hasExpander ? 1 : 0)}
+                    style={{ width: containerWidth || "100%" }}
                   >
-                    <div
-                      className="rfg-detail-content"
-                      style={{ width: containerWidth || "100%" }}
-                    >
                       {renderDetailBody(item.row, item.id)}
                     </div>
                   </div>
@@ -736,6 +793,9 @@ function DataTableInner<T, D>(
  * sticky grand totals, sorting (single/multi), search, column visibility,
  * resizable columns and layout persistence.
  */
-export const DataTable = forwardRef(DataTableInner) as <T, D = unknown>(
+const DataTableWithRef = forwardRef(DataTableInner);
+DataTableWithRef.displayName = "DataTable";
+
+export const DataTable = DataTableWithRef as <T, D = unknown>(
   props: DataTableProps<T, D> & { ref?: Ref<DataTableHandle> }
 ) => ReactElement;

@@ -192,6 +192,10 @@ export interface ExpansionContext<T, D = unknown> {
 export interface DetailLoadingContext<T> {
   row: T;
   rowId: string;
+  /** Restart the request (supersedes and aborts the in-flight one). */
+  reload: () => void;
+  /** Collapse the row. */
+  collapse: () => void;
 }
 
 export interface DetailErrorContext<T> {
@@ -199,6 +203,8 @@ export interface DetailErrorContext<T> {
   rowId: string;
   error: unknown;
   reload: () => void;
+  /** Collapse the row. */
+  collapse: () => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -273,8 +279,15 @@ export interface DataTableProps<T, D = unknown> {
    * Async detail loader. When provided the grid manages per-row
    * idle/loading/success/error state, renders loading/error UI and passes
    * `detail` + `reload` to `renderExpandedRow`.
+   *
+   * `ctx.signal` is aborted when the request is superseded (reload) or the
+   * grid unmounts — forward it to `fetch` to cancel stale work.
    */
-  loadRowDetails?: (row: T, rowId: string) => Promise<D>;
+  loadRowDetails?: (
+    row: T,
+    rowId: string,
+    ctx: { signal?: AbortSignal }
+  ) => Promise<D>;
   /** Custom loading UI for an expanded panel. */
   renderDetailLoading?: (ctx: DetailLoadingContext<T>) => ReactNode;
   /** Custom error UI for an expanded panel (receives `reload`). */
@@ -340,6 +353,11 @@ export interface DataTableProps<T, D = unknown> {
   /* ----- column menu ----- */
   /** Enable the per-column header menu (default true). */
   enableColumnMenu?: boolean;
+  /*  /*  /*  /*  /aet for column menus and the columns panel
+   * (default `document.body`). Point this at a themed subtree when your theme
+   * variables are declared on a wrapper element rather than `:root`.
+   */
+  menuPortalContainer?: HTMLElement | null;
 
   /* ----- layout persistence ----- */
   /** Initial layout snapshot for uncontrolled state (from your storage). */

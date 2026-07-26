@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { ColumnDef } from "../types";
 import { ColumnsIcon } from "./icons";
-import { Menu, type MenuGroupDef } from "./Menu";
+import { Menu, useMenuId, type MenuGroupDef } from "./Menu";
 import { clsx } from "../utils/clsx";
 
 interface ColumnsPanelProps<T> {
@@ -12,6 +12,8 @@ interface ColumnsPanelProps<T> {
   onShowAll: () => void;
   onResetLayout: () => void;
   label?: string;
+  menuPortalContainer?: HTMLElement | null;
+  portalClassName?: string;
 }
 
 /** Toolbar menu for column visibility + layout reset. */
@@ -22,9 +24,12 @@ export function ColumnsPanel<T>({
   onShowAll,
   onResetLayout,
   label = "Columns",
+  menuPortalContainer,
+  portalClassName,
 }: ColumnsPanelProps<T>) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuId = useMenuId("rfg-columns-panel-");
 
   const groups = useMemo<MenuGroupDef[]>(
     () => [
@@ -63,6 +68,7 @@ export function ColumnsPanel<T>({
         aria-haspopup="menu"
         aria-expanded={open}
         data-testid="rfg-columns-panel-trigger"
+        aria-controls={open ? menuId : undefined}
         onClick={() => setOpen((v) => !v)}
       >
         <ColumnsIcon />
@@ -70,6 +76,7 @@ export function ColumnsPanel<T>({
         {hiddenCount > 0 && <span className="rfg-badge">{hiddenCount} hidden</span>}
       </button>
       <Menu
+        id={menuId}
         open={open}
         onClose={() => setOpen(false)}
         anchorRef={buttonRef}
@@ -77,6 +84,8 @@ export function ColumnsPanel<T>({
         label="Column visibility"
         testId="rfg-columns-panel"
         align="start"
+        portalContainer={menuPortalContainer}
+        portalClassName={portalClassName}
       />
     </>
   );

@@ -5,7 +5,11 @@ import { useControllableState } from "./useControllableState";
 const IDLE: AsyncDetailState<never> = { status: "idle" };
 
 interface Options<T, D> {
-  loadRowDetails?: (row: T, rowId: string) => Promise<D>;
+  loadRowDetails?: (
+    row: T,
+    rowId: string,
+    ctx: { signal?: AbortSignal }
+  ) => Promise<D>;
   /** Controlled states — when provided the hook never fetches. */
   rowDetailStates?: RowDetailStates<D>;
   onRowDetailStatesChange?: (states: RowDetailStates<D>) => void;
@@ -41,11 +45,17 @@ export function useRowDetails<T, D>(opts: Options<T, D>): RowDetailsApi<T, D> {
   statesRef.current = states;
 
   const tokens = useRef<Record<string, number>>({});
+  const controllers = useRef<Record<string, AbortController | undefined>>({});
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      // abort in-flight requests on unmount
+      for (const controller of Object.values(controllers.current)) {
+        controller?.abort();
+      }
+      controllers.current = {};
     };
   }, []);
 

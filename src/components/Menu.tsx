@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
   type KeyboardEvent,
@@ -23,6 +24,12 @@ export interface MenuItemDef {
   /** Small colour swatch (highlight actions). */
   swatch?: string;
   danger?: boolean;
+  /**
+   * Return focus to the trigger after selecting (default true). Set to false
+   * for actions that remove the trigger from the DOM (e.g. "Hide column") so
+   * the caller can place focus itself.
+   */
+  restoreFocus?: boolean;
 }
 
 export interface MenuGroupDef {
@@ -30,6 +37,10 @@ export interface MenuGroupDef {
   label?: string;
   items: MenuItemDef[];
 }
+
+const MENU_GAP = 4;
+const VIEWPORT_MARGIN = 8;
+const FALLBACK_MENU_WIDTH = 216;
 
 interface MenuProps {
   open: boolean;
@@ -40,12 +51,22 @@ interface MenuProps {
   label: string;
   testId?: string;
   align?: "start" | "end";
+  /** Portal target (defaults to `document.body`). */
+  portalContainer?: HTMLElement | null;
+  /**
+   * Extra class on the portal wrapper. The wrapper always carries
+   * `rfg-portal` (which declares the theme variables); pass your own theme
+   * class here so custom properties defined by it apply to portalled UI too.
+   */
+  portalClassName?: string;
+  /** Element id, so the trigger can reference it with aria-controls. */
+  id?: string;
 }
 
 /**
  * Minimal accessible popup menu rendered in a portal (so it escapes the
  * grid's `overflow: hidden` cells). Roving focus, Home/End, Escape-to-close
- * with focus restoration, click-outside dismissal.
+ * with focus restoration, click-outside dismissal, viewport-aware placement.
  */
 export function Menu({
   open,
@@ -55,42 +76,139 @@ export function Menu({
   label,
   testId,
   align = "end",
+  portalContainer,
+  portalClassName,
+  id,
 }: MenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const [position, setPosition] = useState<{ top: number; left: number }>({
-    top: 0,
-    left: 0,
-  });
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(
+    null
+  );
 
   const flatItems = groups.flatMap((g) => g.items);
   const enabledIndexes = flatItems
     .map((item, i) => (item.disabled ? -1 : i))
     .filter((i) => i !== -1);
 
-  /* position under the anchor */
-  useIsomorphicLayoutEffect(() => {
-    if (!open) return;
+  /* place the menu under the anchor, flipping/clamping inside the viewport */
+  const updatePosition = useCallback(() => {
     const anchor = anchorRef.current;
+    const menu = menuRef.current;
     if (!anchor || typeof anchor.getBoundingClientRect !== "function") return;
     const rect = anchor.getBoundingClientRect();
-    const width = 216;
-    const left =
-      align === "end"
-        ? Math.max(8, rect.right - width)
-        : Math.max(8, rect.left);
-    setPosition({ top: rect.bottom + 4, left });
-  }, [open, anchorRef, align]);
+    const width = menu?.offsetWidth || FALLBACK_MENU_WIDTH;
+    const height = menu?.offsetHeight || 0;
+    const viewportWidth = typeof window === "undefined" ? 0 : window.innerWidth;
+    const viewportHeight = typeof window === "undefined" ? 0 : window.innerHeight;
 
-  /* focus first enabled item on open */
+    let left = align === "end" ? rect.right - width : rect.left;
+    if (viewportWidth > 0) {
+      left = Math.min(left, viewportWidth - width - VIEWPORT_MARGIN);
+    }
+    left = Math.max(VIEWPORT_MARGIN, left);
+
+    let top = rect.bottom + MENU_GAP;
+    if (
+      viewportHeight > 0 &&
+      height > 0 &&
+      top + height > viewportHeight - VIEWPORT_MARGIN
+    ) {
+      // not enough room below — flip above the anchor, then clamp
+      top = Math.max(VIEWPORT_MARGIN, rect.top - height - MENU_GAP);
+    }
+
+    setPosition((prev) =>
+      prev && prev.top === top && prev.left === left ? prev : { top, left }
+    );
+  }, [anchorRef, align]);
+
+  useIsomorphicLayoutEffect(() => {
+    if (!open) {
+      setPosition(null);
+      return;
+    }
+    updatePosition();
+  }, [open, updatePosition, groups]);
+
+  /*
+   * Keep the menu anchored while the page/grid scrolls or the window resizes.
+   * (Dismissing instead would be flaky: focusing the trigger can itself emit a
+   * scroll-into-view event in the same interaction that opened the menu.)
+   */
   useEffect(() => {
     if (!open) return;
-    const first = enabledIndexes[0];
-    if (first !== undefined) itemRefs.current[first]?.focus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+    let frame: number | null = null;
+    const schedule = () => {
+      if (typeof window === "undefined") return;
+      if (typeof window.requestAnimationFrame !== "function") {
+        updatePosition();
+        return;
+      }
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        const anchor = anchorRef.current;
+        if (!anchor || !anchor.isConnected) {
+          onClose();
+          return;
+        }
+        updatePosition();
+      });
+    };
+    window.addEventListener("scroll", schedule, true);
+    window.addEventListener("resize", schedule);
+    return () => {
+      window.removeEventListener("scroll", schedule, true);
+      window.removeEventListener("resize", schedule);
+      if (frame !== null && typeof window !== "undefined") {
+        window.cancelAnimationFrame(frame);
+      }
+    };
+  }, [open, updatePosition, anchorRef, onClose]);
 
-  /* click outside */
+  /*
+   * Focus the first enabled item once the menu is positioned. Until the
+   * position is measured the menu is `visibility: hidden` (to avoid a
+   * first-paint flash at 0,0) and hidden elements cannot receive focus in
+   * real browsers — so focusing must wait for the positioned commit.
+   */
+  const focusedForOpenRef = useRef(false);
+  useIsomorphicLayoutEffect(() => {
+    if (!open) {
+      focusedForOpenRef.current = false;
+      return;
+    }
+    if (!position || focusedForOpenRef.current) return;
+    const first = enabledIndexes[0];
+    if (first !== undefined) {
+      itemRefs.current[first]?.focus();
+      focusedForOpenRef.current = true;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, position]);
+
+  /* dismiss on scroll/resize: the menu is positioned once, so keeping it open
+     while the page or grid scrolls would leave it visually detached */
+    //  useEffect(() => {
+    //   if (!open) return;
+    //   const onScrollOrResize = (e: Event) => {
+    //     if (e.type === "scroll") {
+    //       const target = e.target as Node | null;
+    //       // ignore scrolling *inside* the menu (long menus scroll)
+    //       if (target && menuRef.current && menuRef.current.contains(target)) return;
+    //     }
+    //     onClose();
+    //   };
+    //   window.addEventListener("scroll", onScrollOrResize, true);
+    //   window.addEventListener("resize", onScrollOrResize);
+    //   return () => {
+    //     window.removeEventListener("scroll", onScrollOrResize, true);
+    //     window.removeEventListener("resize", onScrollOrResize);
+    //   };
+    // }, [open, onClose]);
+  
+    /* click outside */
   useEffect(() => {
     if (!open) return;
     const onDocPointerDown = (e: Event) => {
@@ -104,10 +222,14 @@ export function Menu({
     return () => document.removeEventListener("mousedown", onDocPointerDown, true);
   }, [open, onClose, anchorRef]);
 
-  const closeAndRestoreFocus = useCallback(() => {
-    onClose();
-    anchorRef.current?.focus?.();
-  }, [onClose, anchorRef]);
+  const closeAndRestoreFocus = useCallback(
+    (restoreFocus = true) => {
+      onClose();
+      const anchor = anchorRef.current;
+      if (restoreFocus && anchor && anchor.isConnected) anchor.focus?.();
+    },
+    [onClose, anchorRef]
+  );
 
   const focusAt = (index: number) => itemRefs.current[index]?.focus();
 
@@ -160,71 +282,85 @@ export function Menu({
 
   let index = -1;
   const content = (
-    <div
-      ref={menuRef}
-      className="rfg-menu"
-      role="menu"
-      aria-label={label}
-      data-testid={testId}
-      style={{ top: position.top, left: position.left }}
-      onKeyDown={onKeyDown}
-    >
-      {groups.map((group, gi) => (
-        <div
-          key={group.id}
-          role="group"
-          aria-label={group.label}
-          className="rfg-menu-group"
-        >
-          {gi > 0 && <div className="rfg-menu-separator" role="separator" />}
-          {group.label && <div className="rfg-menu-group-label">{group.label}</div>}
-          {group.items.map((item) => {
-            index += 1;
-            const myIndex = index;
-            return (
-              <button
-                key={item.id}
-                ref={(el) => {
-                  itemRefs.current[myIndex] = el;
-                }}
-                type="button"
-                role={item.checkbox ? "menuitemcheckbox" : "menuitem"}
-                aria-checked={item.checkbox ? Boolean(item.active) : undefined}
-                aria-disabled={item.disabled || undefined}
-                disabled={item.disabled}
-                tabIndex={-1}
-                data-testid={`menu-item-${item.id}`}
-                className={clsx(
-                  "rfg-menu-item",
-                  item.active && "rfg-menu-item--active",
-                  item.danger && "rfg-menu-item--danger"
-                )}
-                onClick={() => {
-                  if (item.disabled) return;
-                  item.onSelect();
-                  closeAndRestoreFocus();
-                }}
-              >
-                {item.swatch && (
-                  <span
-                    className="rfg-menu-swatch"
-                    style={{ background: item.swatch }}
-                    aria-hidden="true"
-                  />
-                )}
-                <span className="rfg-menu-item-label">{item.label}</span>
-                {item.active && !item.swatch && (
-                  <span className="rfg-menu-check" aria-hidden="true">
-                    ✓
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      ))}
+    <div className={clsx("rfg-portal", portalClassName)}>
+      <div
+        ref={menuRef}
+        id={id}
+        className="rfg-menu"
+        role="menu"
+        aria-label={label}
+        data-testid={testId}
+        style={{
+          top: position?.top ?? 0,
+          left: position?.left ?? 0,
+          // avoid a first-paint flash at (0,0) before measurement
+          visibility: position ? undefined : "hidden",
+        }}
+        onKeyDown={onKeyDown}
+      >
+        {groups.map((group, gi) => (
+          <div
+            key={group.id}
+            role="group"
+            aria-label={group.label}
+            className="rfg-menu-group"
+          >
+            {gi > 0 && <div className="rfg-menu-separator" role="separator" />}
+            {group.label && <div className="rfg-menu-group-label">{group.label}</div>}
+            {group.items.map((item) => {
+              index += 1;
+              const myIndex = index;
+              return (
+                <button
+                  key={item.id}
+                  ref={(el) => {
+                    itemRefs.current[myIndex] = el;
+                  }}
+                  type="button"
+                  role={item.checkbox ? "menuitemcheckbox" : "menuitem"}
+                  aria-checked={item.checkbox ? Boolean(item.active) : undefined}
+                  aria-disabled={item.disabled || undefined}
+                  disabled={item.disabled}
+                  tabIndex={-1}
+                  data-testid={`menu-item-${item.id}`}
+                  className={clsx(
+                    "rfg-menu-item",
+                    item.active && "rfg-menu-item--active",
+                    item.danger && "rfg-menu-item--danger"
+                  )}
+                  onClick={() => {
+                    if (item.disabled) return;
+                    item.onSelect();
+                    closeAndRestoreFocus(item.restoreFocus !== false);
+                  }}
+                >
+                  {item.swatch && (
+                    <span
+                      className="rfg-menu-swatch"
+                      style={{ background: item.swatch }}
+                      aria-hidden="true"
+                    />
+                  )}
+                  <span className="rfg-menu-item-label">{item.label}</span>
+                  {item.active && !item.swatch && (
+                    <span className="rfg-menu-check" aria-hidden="true">
+                      ✓
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
     </div>
   );
 
-  return createPortal(content, document.body);
+  return createPortal(content, portalContainer ?? document.body);
+}
+
+/** Stable ids for trigger/menu `aria-controls` wiring. */
+export function useMenuId(prefix: string): string {
+  const id = useId();
+  return `${prefix}${id}`;
 }

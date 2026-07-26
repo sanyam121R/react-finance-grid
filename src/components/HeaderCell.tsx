@@ -10,7 +10,7 @@ import type { Align, HighlightColor, PinSide, SortDirection } from "../types";
 import type { ResolvedColumn } from "../hooks/useColumnLayout";
 import { clsx } from "../utils/clsx";
 import { GripIcon, MenuIcon, PinIcon, SortIcon } from "./icons";
-import { Menu, type MenuGroupDef } from "./Menu";
+import { Menu, useMenuId, type MenuGroupDef } from "./Menu";
 
 export const HIGHLIGHT_COLORS: HighlightColor[] = [
   "none",
@@ -44,7 +44,7 @@ export interface HeaderCellActions {
   resizeNudge: (columnId: string, direction: 1 | -1) => void;
   dragStart: (columnId: string) => void;
   dragOver: (columnId: string) => void;
-  drop: (columnId: string) => void;
+  drop: (columnId: string, fallbackDragId?: string) => void;
   dragEnd: () => void;
 }
 
@@ -65,6 +65,10 @@ interface HeaderCellProps<T> {
   isDragging: boolean;
   isDropTarget: boolean;
   actions: HeaderCellActions;
+  /** Portal target for the column menu (defaults to document.body). */
+  menuPortalContainer?: HTMLElement | null;
+  /** Theme class propagated to the portalled menu. */
+  portalClassName?: string;
 }
 
 export function cellLayoutStyle<T>(col: ResolvedColumn<T>): CSSProperties {
@@ -108,6 +112,8 @@ export function HeaderCell<T>({
   isDragging,
   isDropTarget,
   actions,
+  menuPortalContainer,
+  portalClassName,
 }: HeaderCellProps<T>) {
   const { def } = col;
   const sortable = def.sortable !== false;
@@ -121,6 +127,7 @@ export function HeaderCell<T>({
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuId = useMenuId("rfg-menu-");
 
   const label =
     def.label ?? (typeof def.header === "string" ? def.header : def.id);
@@ -254,6 +261,8 @@ export function HeaderCell<T>({
       layoutItems.push({
         id: `hide-${def.id}`,
         label: "Hide column",
+        // the trigger unmounts with the column — the grid moves focus instead
+        restoreFocus: false,
         onSelect: () => actions.hideColumn(def.id),
       });
     }
@@ -321,7 +330,9 @@ export function HeaderCell<T>({
       onDragOver={
         enableReorder
           ? (e) => {
+              // preventDefault marks this cell as a valid drop target
               e.preventDefault();
+              if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
               actions.dragOver(def.id);
             }
           : undefined
@@ -330,7 +341,8 @@ export function HeaderCell<T>({
         enableReorder
           ? (e) => {
               e.preventDefault();
-              actions.drop(def.id);
+              const transferred = e.dataTransfer?.getData("text/plain");
+              actions.drop(def.id, transferred || undefined);
             }
           : undefined
       }
@@ -343,7 +355,14 @@ export function HeaderCell<T>({
           aria-label={`Reorder ${label} column (use arrow keys to move)`}
           data-testid={`grip-${def.id}`}
           onKeyDown={onGripKeyDown}
-          onDragStart={() => actions.dragStart(def.id)}
+          onDragStart={(e) => {
+            // Firefox refuses to start a drag unless data is set
+            if (e.dataTransfer) {
+              e.dataTransfer.setData("text/plain", def.id);
+              e.dataTransfer.effectAllowed = "move";
+            }
+            actions.dragStart(def.id);
+          }}
           onDragEnd={() => actions.dragEnd()}
           onClick={(e) => e.preventDefault()}
         >
@@ -384,7 +403,10 @@ export function HeaderCell<T>({
         {pinnable && (
           <button
             type="button"
-            className={clsx("rfg-icon-btn", isPinned && "rfg-icon-btn--active")}
+            className={clsx(
+              "rfg-icon-btn rfg-pin-btn",
+              isPinned && "rfg-icon-btn--active rfg-pin-btn--pinned"
+            )}
             aria-label={
               isPinned
                 ? `Unpin ${label}`
@@ -405,6 +427,7 @@ export function HeaderCell<T>({
             aria-label={`${label} column options`}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
+            aria-controls={menuOpen ? menuId : undefined}
             data-testid={`menu-${def.id}`}
             onClick={() => setMenuOpen((v) => !v)}
           >
@@ -414,14 +437,17 @@ export function HeaderCell<T>({
       </span>
 
       {showMenu && (
-        <Menu
-          open={menuOpen}
-          onClose={() => setMenuOpen(false)}
-          anchorRef={menuButtonRef}
-          groups={groups}
-          label={`${label} column options`}
-          testId={`column-menu-${def.id}`}
-        />
+       <Menu
+       id={menuId}
+       open={menuOpen}
+       onClose={() => setMenuOpen(false)}
+       anchorRef={menuButtonRef}
+       groups={groups}
+       label={`${label} column options`}
+       testId={`column-menu-${def.id}`}
+       portalContainer={menuPortalContainer}
+       portalClassName={portalClassName}
+     />
       )}
 
       {resizable && (
