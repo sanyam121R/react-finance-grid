@@ -5,6 +5,12 @@ export const DEFAULT_MIN_WIDTH = 64;
 export const EXPANDER_WIDTH = 40;
 export const RESIZE_KEYBOARD_STEP = 16;
 
+export const DENSITY_ROW_HEIGHT = {
+  compact: 32,
+  comfortable: 44,
+  spacious: 56,
+} as const;
+
 export interface LayoutColumnInput {
   id: string;
   width?: number;
@@ -19,16 +25,15 @@ export interface LayoutColumn {
   id: string;
   width: number;
   pin: PinSide | false;
-  /** Sticky `left` (for left-pinned) or `right` (for right-pinned) offset in px. */
+  /** Sticky `left` (left-pinned) or `right` (right-pinned) offset in px. */
   offset: number;
   isLastLeftPinned: boolean;
   isFirstRightPinned: boolean;
 }
 
 export interface LayoutResult {
-  /** Columns in render order: left-pinned, unpinned, right-pinned. */
+  /** Columns in the caller's order — pinning never reorders. */
   columns: LayoutColumn[];
-  /** Sum of all column widths + leading width. */
   totalWidth: number;
   leftPinnedWidth: number;
   rightPinnedWidth: number;
@@ -43,12 +48,16 @@ export function clampWidth(
 }
 
 /**
- * Pure column layout: clamps widths, distributes leftover container space to
- * stretch columns (that the user has not manually resized), and computes
- * sticky offsets for left/right pinned columns.
+ * Pure column layout — **"pin in place" semantics**.
  *
- * `columns` must already be ordered: left-pinned group, unpinned, right-pinned
- * group. `leadingWidth` reserves space for the always-left-pinned expander.
+ * Columns are laid out strictly in the order given (user/`columnOrder`
+ * defined): pinning never moves a column. A left-pinned column sticks at the
+ * cumulative width of the *left-pinned columns that precede it*, so pinned
+ * columns stack at the viewport edge in their existing relative order while
+ * unpinned columns scroll underneath. Right-pinned columns mirror this from
+ * the right edge.
+ *
+ * `leadingWidth` reserves space for the always-left-stuck expander column.
  */
 export function computeColumnLayout(
   columns: LayoutColumnInput[],
@@ -91,49 +100,38 @@ export function computeColumnLayout(
     }
   }
 
-  const leftCols = columns.filter((c) => c.pin === "left");
-  const midCols = columns.filter((c) => c.pin === false);
-  const rightCols = columns.filter((c) => c.pin === "right");
+  const lastLeftIndex = columns.reduce(
+    (acc, c, i) => (c.pin === "left" ? i : acc),
+    -1
+  );
+  const firstRightIndex = columns.findIndex((c) => c.pin === "right");
 
-  const out: LayoutColumn[] = [];
+  // Left offsets accumulate in order across left-pinned columns only.
+  const out: LayoutColumn[] = columns.map((c, i) => ({
+    id: c.id,
+    width: widths.get(c.id) ?? DEFAULT_WIDTH,
+    pin: c.pin,
+    offset: 0,
+    isLastLeftPinned: i === lastLeftIndex,
+    isFirstRightPinned: i === firstRightIndex,
+  }));
+
   let left = leadingWidth;
-  leftCols.forEach((c, i) => {
-    out.push({
-      id: c.id,
-      width: widths.get(c.id) ?? DEFAULT_WIDTH,
-      pin: "left",
-      offset: left,
-      isLastLeftPinned: i === leftCols.length - 1,
-      isFirstRightPinned: false,
-    });
-    left += widths.get(c.id) ?? DEFAULT_WIDTH;
-  });
-  for (const c of midCols) {
-    out.push({
-      id: c.id,
-      width: widths.get(c.id) ?? DEFAULT_WIDTH,
-      pin: false,
-      offset: 0,
-      isLastLeftPinned: false,
-      isFirstRightPinned: false,
-    });
+  for (const col of out) {
+    if (col.pin === "left") {
+      col.offset = left;
+      left += col.width;
+    }
   }
   // Right offsets accumulate from the right edge inward.
   let right = 0;
-  const rightOut: LayoutColumn[] = [];
-  for (let i = rightCols.length - 1; i >= 0; i--) {
-    const c = rightCols[i]!;
-    rightOut.unshift({
-      id: c.id,
-      width: widths.get(c.id) ?? DEFAULT_WIDTH,
-      pin: "right",
-      offset: right,
-      isLastLeftPinned: false,
-      isFirstRightPinned: i === 0,
-    });
-    right += widths.get(c.id) ?? DEFAULT_WIDTH;
+  for (let i = out.length - 1; i >= 0; i--) {
+    const col = out[i]!;
+    if (col.pin === "right") {
+      col.offset = right;
+      right += col.width;
+    }
   }
-  out.push(...rightOut);
 
   return {
     columns: out,

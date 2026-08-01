@@ -29,7 +29,7 @@ describe("search", () => {
     fireEvent.change(screen.getByTestId("rfg-search"), {
       target: { value: "EMEA" },
     });
-    expect(screen.getByText("No results")).toBeInTheDocument();
+    expect(screen.getByText("No matching rows")).toBeInTheDocument();
   });
 
   it("uses custom getSearchText", () => {
