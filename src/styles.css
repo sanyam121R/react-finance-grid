@@ -631,3 +631,117 @@
   color: var(--rfg-muted);
   font-size: 12px;
 }
+/* ================================================================== */
+/* TreeDataTable + InfoTooltip (additive module — no existing rules    */
+/* above this line are modified)                                       */
+/* ================================================================== */
+
+/* ---------------- tree cells ---------------- */
+.rfg-tree-indent {
+  display: inline-block;
+  flex: 0 0 auto;
+  height: 1px;
+}
+
+.rfg-tree-toggle {
+  flex: 0 0 auto;
+  margin-right: 6px;
+}
+
+.rfg-tree-toggle svg {
+  transition: transform 0.15s ease;
+}
+
+.rfg-tree-toggle--open svg {
+  transform: rotate(90deg);
+}
+
+/* keeps leaf-row content aligned with expandable siblings */
+.rfg-tree-toggle-spacer {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 20px;
+  margin-right: 6px;
+}
+
+.rfg-tree-row--child .rfg-cell {
+  --rfg-row-bg: var(--rfg-tree-child-bg, var(--rfg-bg));
+}
+
+/* ---------------- inline children loading / error rows ---------------- */
+.rfg-tree-placeholder {
+  gap: 10px;
+  border-right: none;
+  height: 100%;
+}
+
+.rfg-tree-children-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.rfg-tree-children-loading .rfg-skeleton-bar {
+  max-width: 220px;
+}
+
+.rfg-tree-children-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--rfg-muted);
+}
+
+/* ---------------- info tooltip ---------------- */
+.rfg-info-btn {
+  flex: 0 0 auto;
+  margin-left: 6px;
+  color: var(--rfg-muted);
+}
+
+.rfg-info-btn:hover,
+.rfg-info-btn:focus-visible {
+  color: var(--rfg-accent);
+}
+
+/* Dark panel, portalled to <body>: tokens are declared locally with
+   fallbacks so theming works without touching the shared token block. */
+.rfg-tooltip {
+  position: fixed;
+  z-index: 1000;
+  max-width: min(320px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--rfg-tooltip-bg, #1e293b);
+  color: var(--rfg-tooltip-text, #f1f5f9);
+  font-size: 12.5px;
+  line-height: 1.45;
+  box-shadow: 0 10px 30px -8px rgba(15, 23, 42, 0.45);
+}
+
+.rfg-tooltip a {
+  color: var(--rfg-tooltip-link, #93c5fd);
+}
+
+.rfg-tooltip-arrow {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  transform: translateX(-50%) rotate(45deg);
+  background: inherit;
+}
+
+.rfg-tooltip--top .rfg-tooltip-arrow {
+  bottom: -4px;
+}
+
+.rfg-tooltip--bottom .rfg-tooltip-arrow {
+  top: -4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rfg-tree-toggle svg {
+    transition: none;
+  }
+}

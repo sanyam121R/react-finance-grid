@@ -8,8 +8,20 @@ High-performance, financial-grade data table for React 18+. TypeScript-first, **
 
 ![Demo](demo/images/Demo.png)
 
+The bundled demo (`npm run demo:build`, see [demo/README.md](demo/README.md)) is a
+**version-tabbed showcase** — one live tab per release:
+
+| Tab | Illustrates |
+| --- | --- |
+| **0.1.0 · Core grid** | 5,000 virtualized rows, pinned columns, sorting, search, resizing, sticky grand total, sync expandable rows (nested grid), skeleton loading |
+| **0.2.0 · Power columns** | Drag/keyboard reorder, per-column menu, pin-in-place, highlighting, multi-sort, visibility panel, density, async row expansion with retry, layout persistence |
+| **0.2.1 · Hardening** | NaN/null-safe sorting demo, abortable detail requests (`ctx.signal`) with a live abort counter, empty-state/grand-total fixes |
+| **0.3.0 · Tree + tooltips** | `TreeDataTable` — children as a continuation of the table under the same headers — and `InfoTooltip` ⓘ cell tooltips (View Details ›, regional breakdowns), sync *and* async children |
+
 ## Features
 
+- 🌳 **`TreeDataTable` — hierarchical rows as a continuation of the table** *(v0.3.0)* — expanding a row renders its children as ordinary rows **under the same column headings** (indented, chevron inline) instead of a detail panel. Sync children (`getRowChildren`) or async (`loadRowChildren` with inline loading/error rows, retry, caching, `AbortSignal`); per-level sorting that never tears subtrees apart; tree-aware search; root-only grand totals; treegrid a11y (`aria-level`, `aria-expanded`, `aria-posinset`/`aria-setsize`). Shares the entire column system (pinning, reorder, menus, visibility, highlights, persistence) with `DataTable`.
+- ⓘ **`InfoTooltip`** *(v0.3.0)* — accessible info tooltip for per-row/per-cell details (e.g. regional breakdowns, "View Details ›" links). Opens on hover with intent delay and on keyboard focus immediately; **interactive content stays reachable**; Escape dismisses; portalled + viewport-aware. Wire it per column with `TreeColumnDef.infoTip(row, rowId)` or use it standalone anywhere.
 - 🦴 **Skeleton loading** — `isLoading` renders shimmer rows matching your real columns; standalone `<TableSkeleton />` works as a `<Suspense>` fallback.
 - 📌 **Pin in place (left *and* right)** — pinning **never moves a column**; it sticks where the user put it. Header pin button + menu actions, controlled or uncontrolled pinning state, deterministic sticky offsets.
 - ↕️ **Column drag reorder** — grip handle with HTML5 drag & drop, plus keyboard **←/→** and “Move left/right” menu actions; controlled or uncontrolled `columnOrder`, per-column `movable` opt-out.
@@ -118,6 +130,77 @@ const Dashboard = lazy(() => import("./Dashboard"));
 </Suspense>;
 ```
 
+## Quick start — `TreeDataTable` (v0.3.0)
+
+Hierarchical data where expanding a parent shows its children **in the same
+table**, under the same column headings — plus ⓘ info tooltips per cell:
+
+```tsx
+import { TreeDataTable, type TreeColumnDef } from "react-finance-grid";
+import "react-finance-grid/styles.css";
+
+interface Account {
+  id: string;
+  name: string;
+  fy2025: number;
+  regionBreakdown?: { region: string; amount: number }[];
+  children?: Account[];
+}
+
+const columns: TreeColumnDef<Account>[] = [
+  { id: "name", header: "Account", accessorKey: "name" }, // tree column (chevron + indent)
+  {
+    id: "fy2025",
+    header: "FY 2025",
+    accessorKey: "fy2025",
+    aggregate: "sum",
+    // ⓘ appears only on rows that return content
+    infoTip: (row) =>
+      row.regionBreakdown && (
+        <ul>
+          {row.regionBreakdown.map((r) => (
+            <li key={r.region}>{r.region}: {r.amount}</li>
+          ))}
+        </ul>
+      ),
+  },
+];
+
+// Synchronous children:
+<TreeDataTable<Account>
+  data={accounts}
+  columns={columns}
+  getRowId={(r) => r.id}
+  getRowChildren={(r) => r.children}
+  showGrandTotal
+  grandTotalLabel="Total Expenses" // aggregates ROOT rows only — no double counting
+/>;
+
+// …or async children (inline loading/error rows, retry, caching, abort):
+<TreeDataTable<Account>
+  data={accounts}
+  columns={columns}
+  getRowId={(r) => r.id}
+  loadRowChildren={(row, id, { signal }) =>
+    fetch(`/api/accounts/${id}/children`, { signal }).then((r) => r.json())
+  }
+  getRowCanExpand={(r) => r.hasChildren}
+  defaultExpandedRowIds={new Set(["benefits"])}
+/>;
+```
+
+`InfoTooltip` is also exported standalone — use it inside `DataTable` cells,
+toolbars, headers, anywhere:
+
+```tsx
+import { InfoTooltip } from "react-finance-grid";
+
+<InfoTooltip
+  label="Amount breakdown"
+  content={<div>India $2,021 · UK $1,000 · <a href="/details">View Details ›</a></div>}
+/>;
+```
+
 ## Advanced example — pin in place, reorder, menu, async details, persistence
 
 ```tsx
@@ -221,11 +304,11 @@ function Dashboard({ rows }: { rows: DeptRow[] }) {
 | Prop | Type | Default | Description |
 | --- | --- | --- | --- |
 | `data` | `T[]` | — | Table rows |
-| `columns` | `ColumnDef<T, D>[]` | — | Column definitions |
-| `getRowId` | `(row: T, index: number) => string` | index-based fallback | Stable row id |
+| `columns` | `ColumnDef<T>[]` | — | Column definitions |
+| `getRowId` | `(row: T, index: number) => string` | **required** | Stable unique row id (do not derive it from `index`) |
 | `height` | `number \| string` | `480` | Scroll viewport height |
 | `rowHeight` | `number` | density preset | Fixed row height (windowing contract) |
-| `expandedRowHeight` | `number` | `220` | Declared expanded panel height |
+| `expandedRowHeight` | `number` | `200` | Declared expanded panel height |
 | `density` | `"compact" \| "comfortable" \| "spacious"` | `"comfortable"` | Row height/padding preset |
 | `overscan` | `number` | `6` | Extra rows rendered outside the viewport |
 | `disableVirtualization` | `boolean` | `false` | Render all rows |
@@ -244,16 +327,16 @@ function Dashboard({ rows }: { rows: DeptRow[] }) {
 | `columnHighlights` / `onColumnHighlightsChange` / `defaultColumnHighlights` | `Record<string, HighlightColor>` | from `column.highlight` | Highlighting |
 | `highlightTotals` | `boolean` | `true` | Apply highlight to total cells |
 | `enableColumnMenu` | `boolean` | `true` | Per-column header menu |
-| `expandedRowIds` / `onExpandedRowIdsChange` / `defaultExpandedRowIds` | `string[]` | uncontrolled | Expanded row state |
+| `expandedRowIds` / `onExpandedRowIdsChange` | `ReadonlySet<string>` | uncontrolled | Expanded row state |
 | `onRowExpand` | `(row: T) => void \| Promise<void>` | — | Fire-and-forget hook on expand |
-| `loadRowDetails` | `(row: T, rowId: string) => Promise<D>` | — | Async detail loader |
+| `loadRowDetails` | `(row: T, rowId: string, ctx: { signal?: AbortSignal }) => Promise<D>` | — | Async detail loader; `ctx.signal` aborts on reload/unmount *(v0.2.1)* |
 | `renderExpandedRow` | `(ctx: ExpansionContext<T, D>) => ReactNode` | — | Custom expanded panel |
 | `renderDetailLoading` | `(ctx: DetailLoadingContext<T>) => ReactNode` | built-in skeleton | Custom loading panel |
 | `renderDetailError` | `(ctx: DetailErrorContext<T>) => ReactNode` | built-in error + retry | Custom error panel |
 | `rowDetailStates` / `onRowDetailStatesChange` | `RowDetailStates<D>` | uncontrolled | Controlled async detail state |
 | `onRowDetailReload` | `(row: T, rowId: string) => void` | — | Reload hook in controlled mode |
 | `showGrandTotal` | `boolean` | `false` | Render sticky total row |
-| `grandTotalLabel` | `ReactNode` | `"Total"` | Label for summary row |
+| `grandTotalLabel` | `ReactNode` | `"Grand total"` | Label for summary row |
 | `totalsScope` | `"all" \| "filtered"` | `"filtered"` | Rows included in totals |
 | `emptyMessage` | `ReactNode` | `"No results"` | Shown when `data` is empty |
 | `noResultsMessage` | `ReactNode` | `"No matching rows"` | Shown when search filters all rows out |
@@ -261,9 +344,13 @@ function Dashboard({ rows }: { rows: DeptRow[] }) {
 | `toolbarContent` | `ReactNode` | — | **Deprecated** — use `toolbarEnd` |
 | `defaultLayout` | `GridLayoutState \| null` | — | Hydrate uncontrolled layout |
 | `onLayoutChange` | `(layout: GridLayoutState) => void` | — | Fires on layout mutations |
+| `menuPortalContainer` | `HTMLElement \| null` | `document.body` | Portal target for menus/panels (themed subtrees) |
+| `onRowClick` | `(row: T) => void` | — | Row click handler |
+| `ariaLabel` | `string` | `"Data table"` | Accessible grid name |
+| `skeletonRowCount` | `number` | `8` | Skeleton rows while `isLoading` |
 | `className` | `string` | — | Root class name |
 
-### `ColumnDef<T, D = unknown>`
+### `ColumnDef<T>`
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -271,14 +358,13 @@ function Dashboard({ rows }: { rows: DeptRow[] }) {
 | `header` | `ReactNode \| (ctx: HeaderContext<T>) => ReactNode` | `id` | Static or rendered header (`ctx` includes sort direction/index, pin side, highlight) |
 | `accessorKey` | `keyof T` | — | Read a row field |
 | `accessorFn` | `(row: T) => unknown` | — | Derived value accessor |
-| `cell` | `(row: T) => ReactNode` | accessor value | Custom cell renderer |
-| `footer` | `ReactNode \| ((ctx) => ReactNode)` | — | Footer content |
-| `renderTotal` | `(value: unknown) => ReactNode` | raw aggregate | Custom summary renderer |
+| `cell` | `(row: T, value: unknown) => ReactNode` | `String(value)` | Custom cell renderer |
+| `renderTotal` | `(value: number \| null, rows: T[]) => ReactNode` | formatted number / `"—"` | Custom total-row renderer |
 | `align` | `"left" \| "center" \| "right"` | numeric → `"right"` | Alignment |
-| `width` | `number` | auto | Initial width |
-| `minWidth` | `number` | `96` | Minimum width |
-| `maxWidth` | `number` | — | Maximum width |
-| `stretch` | `boolean` | `false` | Absorb leftover width |
+| `width` | `number` | `160` | Initial width |
+| `minWidth` | `number` | `64` | Minimum width |
+| `maxWidth` | `number` | `Infinity` | Maximum width |
+| `stretch` | `boolean` | `true` | Absorb leftover container width |
 | `sortable` | `boolean` | `true` | Allow sorting |
 | `sortFn` | `(a, b) => number` | smart comparator | Custom comparator |
 | `searchable` | `boolean` | `true` | Include in global search |
@@ -292,8 +378,64 @@ function Dashboard({ rows }: { rows: DeptRow[] }) {
 | `menu` | `boolean` | `true` | Show per-column menu |
 | `label` | `string` | header text or id | Accessible column label |
 | `resizable` | `boolean` | `true` | Allow width changes |
-| `className` | `string` | — | Cell class name |
-| `meta` | `unknown` | — | Consumer metadata |
+| `className` / `headerClassName` | `string` | — | Cell / header cell class name |
+
+### `TreeDataTableProps<T>` (v0.3.0)
+
+`TreeDataTable` shares the column system and most props with `DataTable`
+(`height`, `rowHeight`, `density`, `overscan`, `disableVirtualization`,
+`isLoading`/`skeletonRowCount`, `sorting`/`multiSort`, search, column
+order/pinning/widths/visibility/highlights (+ `showColumnsPanel`),
+`enableColumnMenu`/`enableColumnReorder`, `menuPortalContainer`,
+`defaultLayout`/`onLayoutChange` + the same `DataTableHandle` ref, grand
+total props, empty states, toolbar slots, `onRowClick`, `ariaLabel`).
+It replaces the detail-panel expansion props with:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `data` | `T[]` | — | **Root** rows (children come from the props below) |
+| `columns` | `TreeColumnDef<T>[]` | — | Same as `ColumnDef` + `infoTip` |
+| `getRowId` | `(row: T, index: number) => string` | **required** | Stable unique id across the whole tree |
+| `getRowChildren` | `(row: T) => readonly T[] \| null \| undefined` | — | Synchronous children (non-empty ⇒ expandable) |
+| `loadRowChildren` | `(row, rowId, ctx: { signal? }) => Promise<T[]>` | — | Async children loader (inline loading/error rows, retry, caching, abort). Ignored when `getRowChildren` is set |
+| `getRowCanExpand` | `(row: T) => boolean` | sync: children present; async: `true` | Expandability override (`false` always wins) |
+| `renderChildrenLoading` / `renderChildrenError` | `(ctx) => ReactNode` | built-in row | Custom inline loading / error (with `reload`) rows |
+| `rowChildrenStates` / `onRowChildrenStatesChange` / `onRowChildrenReload` | `RowChildrenStates<T>` | uncontrolled | Controlled async children state |
+| `expandedRowIds` / `onExpandedRowIdsChange` / `defaultExpandedRowIds` | `ReadonlySet<string>` | uncontrolled | Expansion state (default-expanded rows auto-load in async mode) |
+| `onRowExpand` | `(row: T) => void \| Promise<void>` | — | Fire-and-forget hook on expand |
+| `treeColumnId` | `string` | first column | Column carrying indent + chevron (falls back to the first **visible** column) |
+| `indentSize` | `number` | `24` | Indent per depth level (px) |
+
+Semantics worth knowing:
+
+- **Sorting** is applied independently to every sibling group — subtrees stay
+  glued under their parent in both directions, including multi-sort.
+- **Search** is tree-aware: a match keeps its ancestor chain visible and is
+  revealed even under collapsed parents; non-matching siblings drop out.
+- **Grand total** aggregates **root rows only** (`totalsScope="all"` = all
+  roots; `"filtered"` = roots surviving the search).
+- A11y: `role="treegrid"`, rows carry `aria-level`, `aria-expanded`,
+  `aria-posinset` / `aria-setsize`.
+
+### `TreeColumnDef<T>` (v0.3.0)
+
+Everything from `ColumnDef<T>`, plus:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `infoTip` | `(row: T, rowId: string) => ReactNode` | Return tooltip content to render an ⓘ trigger after the cell content; return `null`/`undefined` to omit it for that row |
+| `infoTipLabel` | `string` | Accessible name for the ⓘ trigger |
+
+### `InfoTooltipProps` (v0.3.0)
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `content` | `ReactNode` | — | Tooltip body (interactive content supported) |
+| `label` | `string` | `"Row details"` | Accessible name for the ⓘ trigger |
+| `placement` | `"top" \| "bottom"` | `"top"` | Preferrece runs out |
+| `openDelay` / `closeDelay` | `number` | `100` / `150` | Hover intent delays (ms); focus/blur are always immediate; `closeDelay` keeps links reachable |
+| `portalContainer` / `portalClassName` | `HTMLElement \| null` / `string` | `document.body` | Portal target / theme class |
+| `className` / `testId` | `string` | — | Trigger class / test id |
 
 ## Pinning model — “pin in place”
 
@@ -365,7 +507,7 @@ Highlight wins over row hover styling so emphasized columns stay readable.
 
 ```tsx
 <DataTable<Row, Detail>
-  loadRowDetails={async (row, rowId) => fetchDetail(rowId)}
+  loadRowDetails={(row, rowId, { signal }) => fetchDetail(rowId, { signal })}
   renderDetailLoading={({ rowId }) => <MySkeleton id={rowId} />}
   renderDetailError={({ error, reload }) => (
     <MyError error={error} onRetry={reload} />
@@ -379,7 +521,7 @@ Highlight wins over row hover styling so emphasized columns stay readable.
 - Per-row state machine: `idle → loading → success | error`.
 - Rows load independently and concurrently.
 - Successful results are cached.
-- `reload()` forces a refetch.
+- `reload()` forces a refetch and **aborts** the superseded request via `ctx.signal` (v0.2.1); unmounting aborts all in-flight requests.
 - Without `loadRowDetails`, expansion remains synchronous.
 - Controlled mode is supported through `rowDetailStates`.
 
@@ -432,9 +574,11 @@ A layout snapshot contains:
 
 `serializeLayout`, `parseLayout`, `reconcileLayout`, `createEmptyLayout`, `formatCurrency`, `createCurrencyFormatter`, `formatPercent`, `formatNumber`, `formatVariance`, `cycleSingleSort`, `cycleMultiSort`, `addSort`, `removeSort`, `setSingleSort`, `makeSortComparator`, `LAYOUT_VERSION`.
 
+Components: `DataTable`, `TreeDataTable` *(v0.3.0)*, `TableSkeleton`, `InfoTooltip` *(v0.3.0)*.
+
 ## Exported types
 
-`ColumnDef`, `DataTableProps`, `DataTableHandle`, `TableSkeletonProps`, `SortState`, `SortDirection`, `ColumnPinningState`, `ColumnOrderState`, `ColumnVisibilityState`, `ColumnWidthState`, `ColumnHighlightState`, `HighlightColor`, `Density`, `PinSide`, `Aggregate`, `AggregateFn`, `TotalsScope`, `Align`, `HeaderContext`, `ExpansionContext`, `AsyncDetailState`, `DetailStatus`, `RowDetailStates`, `DetailLoadingContext`, `DetailErrorContext`, `GridLayoutState`.
+`ColumnDef`, `DataTableProps`, `DataTableHandle`, `TableSkeletonProps`, `SortState`, `SortDirection`, `ColumnPinningState`, `ColumnOrderState`, `ColumnVisibilityState`, `ColumnWidthState`, `ColumnHighlightState`, `HighlightColor`, `Density`, `PinSide`, `Aggregate`, `AggregateFn`, `TotalsScope`, `Align`, `HeaderContext`, `ExpansionContext`, `AsyncDetailState`, `DetailStatus`, `RowDetailStates`, `DetailLoadingContext`, `DetailErrorContext`, `GridLayoutState`, `TreeDataTableProps`, `TreeColumnDef`, `RowChildrenStates`, `ChildrenLoadingContext`, `ChildrenErrorContext`, `InfoTooltipProps`.
 
 ## Controlled vs. uncontrolled
 
@@ -472,12 +616,22 @@ Sorting, search, pinning, **column order, widths, visibility, highlights**, expa
 - Fixed row and panel heights are still the default model.
 - Pinned columns are not forced into one contiguous edge group.
 - Drag reorder uses HTML5 drag and drop, so touch devices should prefer keyboard or menu movement.
-- Menus are positioned on open and do not automatically reposition during scroll while open.
 - Search is not internally debounced.
 - Stretch redistribution stays single-pass when `maxWidth` is hit.
-- `role="table"` is used instead of full `role="grid"` keyboard navigation.
+- `role="table"` / `role="treegrid"` semantics are exposed, but full 2-D `role="grid"` keyboard navigation is not implemented yet.
+- `TreeDataTable` renders parent-held values; it does not (yet) roll child values up into parents.
+- During an active search, branches revealed because a descendant matches stay open until the search is cleared.
 
 ## Roadmap
+
+Shipped in 0.3.0:
+- `TreeDataTable` (children as a continuation of the table)
+- `InfoTooltip` + per-column `infoTip`
+
+Shipped in 0.2.1 (hardening — see [CHANGELOG](CHANGELOG.md)):
+- real `AbortSignal` wiring for `loadRowDetails`
+- NaN / Invalid-Date-safe sorting
+- resize-drag cleanup, multi-sort click cycle, empty-state totals, menu/panel fixes
 
 Shipped in 0.2.0:
 - pin-in-place
@@ -493,6 +647,7 @@ Shipped in 0.2.0:
 - formatter helpers
 
 Next candidates:
+- parent value roll-up + group band rows for `TreeDataTable`
 - `role="grid"` 2-D keyboard navigation
 - row selection
 - CSV/XLSX export helpers

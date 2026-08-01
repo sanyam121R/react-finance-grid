@@ -73,16 +73,36 @@ export function useRowDetails<T, D>(opts: Options<T, D>): RowDetailsApi<T, D> {
       if (!loadRowDetails) return;
       const token = (tokens.current[rowId] ?? 0) + 1;
       tokens.current[rowId] = token;
+
+      // Supersede: abort the previous in-flight request for this row.
+      controllers.current[rowId]?.abort();
+      const controller =
+        typeof AbortController !== "undefined" ? new AbortController() : undefined;
+      controllers.current[rowId] = controller;
+
       patch(rowId, { status: "loading" });
-      loadRowDetails(row, rowId).then(
-        (data) => {
-          if (!mounted.current || tokens.current[rowId] !== token) return;
-          patch(rowId, { status: "success", data });
-        },
-        (error: unknown) => {
-          if (!mounted.current || tokens.current[rowId] !== token) return;
-          patch(rowId, { status: "error", error });
+
+      const settle = (next: AsyncDetailState<D>) => {
+        if (controllers.current[rowId] === controller) {
+          delete controllers.current[rowId];
         }
+        if (!mounted.current || tokens.current[rowId] !== token) return;
+        patch(rowId, next);
+      };
+
+      let promise: Promise<D>;
+      try {
+        // Promise.resolve guards against loaders that throw synchronously.
+        promise = Promise.resolve(
+          loadRowDetails(row, rowId, { signal: controller?.signal })
+        );
+      } catch (error: unknown) {
+        settle({ status: "error", error });
+        return;
+      }
+      promise.then(
+        (data) => settle({ status: "success", data }),
+        (error: unknown) => settle({ status: "error", error })
       );
     },
     [loadRowDetails, patch]

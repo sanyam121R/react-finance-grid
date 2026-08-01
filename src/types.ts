@@ -353,7 +353,8 @@ export interface DataTableProps<T, D = unknown> {
   /* ----- column menu ----- */
   /** Enable the per-column header menu (default true). */
   enableColumnMenu?: boolean;
-  /*  /*  /*  /*  /aet for column menus and the columns panel
+  /**
+   * Portal target for column menus and the columns panel
    * (default `document.body`). Point this at a themed subtree when your theme
    * variables are declared on a wrapper element rather than `:root`.
    */

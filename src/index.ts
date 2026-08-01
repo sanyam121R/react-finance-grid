@@ -1,5 +1,16 @@
 export { DataTable } from "./DataTable";
+export { TreeDataTable } from "./TreeDataTable";
 export { TableSkeleton } from "./components/TableSkeleton";
+export { InfoTooltip, type InfoTooltipProps } from "./components/InfoTooltip";
+
+/* tree table types */
+export type {
+  ChildrenErrorContext,
+  ChildrenLoadingContext,
+  RowChildrenStates,
+  TreeColumnDef,
+  TreeDataTableProps,
+} from "./treeTypes";
 
 /* layout persistence helpers (storage-agnostic) */
 export {

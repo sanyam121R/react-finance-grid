@@ -731,8 +731,8 @@ const [draggingId, setDraggingId] = useState<string | null>(null);
           </div>
         )}
 
-        {/* grand total — sticky bottom */}
-        {showGrandTotal && !isLoading && totals && (
+        {/* grand total — sticky bottom (hidden when there is nothing to total) */}
+        {showGrandTotal && !isLoading && totals && items.length > 0 && (
           <div
             className="rfg-total-row"
             role="row"

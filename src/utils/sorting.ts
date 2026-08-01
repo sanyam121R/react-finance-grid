@@ -30,14 +30,13 @@ export function cycleSingleSort(
   sorting: SortState[],
   columnId: string
 ): SortState[] {
-  const current = sorting.length === 1 && sorting[0]!.columnId === columnId
-    ? sorting[0]!
-    : undefined;
+  // Cycle from the column's current direction even when it is part of a
+  // multi-sort chain (a plain click collapses the chain to a single sort).
+  const current = sorting.find((s) => s.columnId === columnId);
   if (!current) return [{ columnId, direction: "asc" }];
   if (current.direction === "asc") return [{ columnId, direction: "desc" }];
   return [];
 }
-
 /**
  * Multi-sort cycle: appends the column to the chain, then cycles
  * asc -> desc -> removed, keeping the rest of the chain intact.

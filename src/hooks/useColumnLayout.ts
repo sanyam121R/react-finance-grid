@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { ColumnDef, PinSide } from "../types";
 import {
   clampWidth,
@@ -64,11 +64,23 @@ export function useColumnLayout<T>(opts: Options<T>): ColumnLayoutApi<T> {
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
 
+  /** Teardown for an in-flight resize drag (also invoked on unmount). */
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(
+    () => () => {
+      dragCleanupRef.current?.();
+      dragCleanupRef.current = null;
+    },
+    []
+  );
+
   const startResizeDrag = useCallback(
     (columnId: string, clientX: number) => {
       if (typeof window === "undefined") return;
       const col = layoutRef.current.resolved.find((c) => c.id === columnId);
       if (!col || col.def.resizable === false) return;
+      // only one drag at a time — cancel a stale one defensively
+      dragCleanupRef.current?.();
       const startWidth = col.width;
       const min = col.def.minWidth ?? DEFAULT_MIN_WIDTH;
       const max = col.def.maxWidth ?? Number.POSITIVE_INFINITY;
@@ -80,14 +92,18 @@ export function useColumnLayout<T>(opts: Options<T>): ColumnLayoutApi<T> {
           clampWidth(startWidth + factor * (e.clientX - clientX), min, max)
         );
       };
-      const onUp = () => {
+      const cleanup = () => {
         window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointerup", cleanup);
+        window.removeEventListener("pointercancel", cleanup);
         document.body.style.removeProperty("cursor");
         document.body.style.removeProperty("user-select");
+        dragCleanupRef.current = null;
       };
+      dragCleanupRef.current = cleanup;
       window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointerup", cleanup);
+      window.addEventListener("pointercancel", cleanup);
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
     },

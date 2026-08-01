@@ -25,6 +25,11 @@ export interface MenuItemDef {
   swatch?: string;
   danger?: boolean;
   /**
+   * Keep the menu open after selecting (e.g. checkbox toggles in the
+   * columns panel, so users can flip several switches in one visit).
+   */
+  keepOpen?: boolean;
+  /**
    * Return focus to the trigger after selecting (default true). Set to false
    * for actions that remove the trigger from the DOM (e.g. "Hide column") so
    * the caller can place focus itself.
@@ -185,7 +190,6 @@ export function Menu({
       itemRefs.current[first]?.focus();
       focusedForOpenRef.current = true;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, position]);
 
   /* dismiss on scroll/resize: the menu is positioned once, so keeping it open
@@ -252,8 +256,11 @@ export function Menu({
       }
       case "ArrowUp": {
         e.preventDefault();
+        // When no item has focus yet, wrap to the LAST enabled item.
         const prev =
-          enabledIndexes[(pos - 1 + enabledIndexes.length) % enabledIndexes.length];
+          pos === -1
+            ? enabledIndexes[enabledIndexes.length - 1]
+            : enabledIndexes[(pos - 1 + enabledIndexes.length) % enabledIndexes.length];
         if (prev !== undefined) focusAt(prev);
         break;
       }
@@ -331,6 +338,7 @@ export function Menu({
                   onClick={() => {
                     if (item.disabled) return;
                     item.onSelect();
+                    if (item.keepOpen) return;
                     closeAndRestoreFocus(item.restoreFocus !== false);
                   }}
                 >

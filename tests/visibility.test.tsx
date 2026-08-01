@@ -46,7 +46,7 @@ describe("column visibility", () => {
     fireEvent.click(item);
     expect(headerOrder()).toEqual(["name", "budget", "actual"]);
 
-    fireEvent.click(screen.getByTestId("rfg-columns-panel-trigger"));
+    // the panel stays open after a checkbox toggle (multi-toggle UX)
     expect(screen.getByTestId("menu-item-visibility-region")).toHaveAttribute(
       "aria-checked",
       "false"

@@ -40,10 +40,12 @@ export function ColumnsPanel<T>({
           id: `visibility-${c.id}`,
           label:
             c.label ?? (typeof c.header === "string" ? c.header : c.id),
-          checkbox: true,
-          active: isVisible(c.id),
-          disabled: c.hideable === false,
-          onSelect: () => onToggle(c.id),
+            checkbox: true,
+            active: isVisible(c.id),
+            disabled: c.hideable === false,
+            // let users flip several columns without reopening the panel
+            keepOpen: true,
+            onSelect: () => onToggle(c.id),
         })),
       },
       {
